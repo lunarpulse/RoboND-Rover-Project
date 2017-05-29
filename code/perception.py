@@ -165,12 +165,13 @@ def perception_step(Rover):
 
     # Rover.samples_pos = (np.mean(rock_x_world) ,np.mean(rock_y_world))
     #print(rock_x_world,rock_y_world)
-    print(len(rock_x_world))
+    #print(len(rock_x_world))
+
     # 7) Update Rover worldmap (to be displayed on right side of screen)
         # Example: Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] += 1
         #          Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
         #          Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
-    if (1>Rover.pitch or Rover.pitch>359) and (1>Rover.roll or Rover.roll>359):
+    if (1>Rover.roll or Rover.roll>359) and (1>Rover.pitch or Rover.pitch>359):
         Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] += 1
         Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
         Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
@@ -178,28 +179,25 @@ def perception_step(Rover):
     # 8) Convert rover-centric pixel positions to polar coordinates
     rover_centric_pixel_distances, rover_centric_angles = to_polar_coords(xpix, ypix)
     #mean_dir = np.mean(rover_centric_angles)
+    Rover.nav_dists = rover_centric_pixel_distances
+    Rover.nav_angles = rover_centric_angles
 
-    rockdists, rockangles = to_polar_coords(xrock, yrock)
-    rock_dist = np.mean(rockdists)
-    rock_dir = np.mean(rockangles)
-    print(rock_dist, rock_dir)
-    # Update Rover pixel distances and angles
-        # Rover.nav_dists = rover_centric_pixel_distances
-        # Rover.nav_angles = rover_centric_angles
-    if rock_dist < 10:
-        Rover.nav_dists = rockdists
-        Rover.nav_angles = rockangles
+    if len(xrock) > 0:
+        #stauts updte
+        Rover.sample_on_sight = True
+        Rover.sample_persistance += 1
+        rockdists, rockangles = to_polar_coords(xrock, yrock)
+        Rover.sample_dists = rockdists
+        Rover.sample_angles = rockangles
+        rock_dist = np.mean(rockdists)
+        rock_dir = np.mean(rockangles)
+        # print('rock dist and angle: ',rock_dist, rock_dir)
+        # print(rockdists, rockangles)
     else:
-        Rover.nav_dists = rover_centric_pixel_distances
-        Rover.nav_angles = rover_centric_angles
-    #     Rover.samples_pos = (rock_x_world ,rock_y_world)
-    # if len(rockdist) > 0:
-    #
-    #     Rover.nav_dists = rockdist
-    #     Rover.nav_angles = rockangles
-    # else:
-
-
+        if Rover.sample_persistance > 0:
+            Rover.sample_persistance -= 1
+        else:
+            Rover.sample_persistance = 0
 
 
     return Rover
