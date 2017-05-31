@@ -152,9 +152,18 @@ def perception_step(Rover):
     warped_cliped = perspect_transform(masked_image, source, destination)
     # 3) Apply color threshold to identify navigable terrain/obstacles/rock samples
 
-    obstacles = obstacle_filter(warped_cliped)
     sample_threshed = sample_thresh(warped_cliped)
     threshed = color_thresh(warped_cliped)
+
+    obs_rect_img = np.zeros((height,width), np.uint8)
+    cv2.rectangle(obs_rect_img, (0 ,np.int(height*6/12)),(np.int(width) ,np.int(height)), 1, thickness=-1)
+
+    obs_masked_image = cv2.bitwise_and(Rover.img, Rover.img, mask=obs_rect_img)
+    # 2) Apply perspective transform
+    obs_warped_cliped = perspect_transform(obs_masked_image, source, destination)
+    # 3) Apply color threshold to identify navigable terrain/obstacles/rock samples
+
+    obstacles = obstacle_filter(obs_warped_cliped)
 
 
     # 4) Update Rover.vision_image (this will be displayed on left side of screen)

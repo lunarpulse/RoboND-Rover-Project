@@ -60,7 +60,7 @@ class RoverState():
         # of navigable terrain pixels.  This is a very crude form of knowing
         # when you can keep going and when you should stop.  Feel free to
         # get creative in adding new fields or modifying these!
-        self.stop_forward = 50 # Threshold to initiate stopping
+        self.stop_forward = 120 # Threshold to initiate stopping
         self.go_forward = 300 # Threshold to go forward again
         self.max_vel = 4 # Maximum velocity (meters/second)
         # Image output from perception step
@@ -78,7 +78,7 @@ class RoverState():
         self.send_pickup = False # Set to True to trigger rock pickup
 
         self.drive_tendancy = 0 # 1 for right -1 for left
-        self.drive_bias_angle = 8 #adding to steering with tendency
+        self.drive_bias_angle = 4 #adding to steering with tendency
         self.obstacle_dists = None
         self.obstacle_angles= None
 
