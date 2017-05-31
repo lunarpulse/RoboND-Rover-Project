@@ -36,7 +36,7 @@ def obstacle_filter(img, rgb_thresh=(160, 160, 160)):
     color_select_obst = np.zeros_like(img[:,:,0])
     obs= np.zeros_like(img[:,:,0])
 
-    kernel = np.ones((10,10),np.uint8)
+    kernel = np.ones((5,5),np.uint8)
 
     above_thresh = (img[:,:,0] > rgb_thresh[0]) \
                 & (img[:,:,1] > rgb_thresh[1]) \
