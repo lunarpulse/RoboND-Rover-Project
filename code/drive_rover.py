@@ -77,13 +77,20 @@ class RoverState():
         self.picking_up = 0 # Will be set to telemetry value data["picking_up"]
         self.send_pickup = False # Set to True to trigger rock pickup
 
+        self.drive_tendancy = 0 # 1 for right -1 for left
+        self.drive_bias_angle = 8 #adding to steering with tendency
+        self.obstacle_dists = None
+        self.obstacle_angles= None
+
         self.sample_on_sight = False
         self.sample_persistance = 0
         self.sample_dists = None
         self.sample_angles= None
-
+        self.samples_collected = 0
         self.stuck_frames = 0
-        self.star_position = None
+        self.start_position = None #(,) enter when started == 1
+        self.started = False #started?
+        self.finished = False  #set when 6 samples are collected
 # Initialize our rover
 Rover = RoverState()
 

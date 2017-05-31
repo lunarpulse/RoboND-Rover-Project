@@ -6,7 +6,7 @@ import cv2
 def color_thresh(img, rgb_thresh=(160, 160, 160)):
     # Create an array of zeros same xy size as img, but single channel
     color_select = np.zeros_like(img[:,:,0])
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(3,3))
     # Require that each pixel be above all three threshold values in RGB
     # above_thresh will now contain a boolean array with "True"
     # where threshold was met
@@ -36,19 +36,27 @@ def obstacle_filter(img, rgb_thresh=(160, 160, 160)):
     color_select_obst = np.zeros_like(img[:,:,0])
     obs= np.zeros_like(img[:,:,0])
 
-    kernel = np.ones((5,5),np.uint8)
+    kernel = np.ones((10,10),np.uint8)
 
     above_thresh = (img[:,:,0] > rgb_thresh[0]) \
                 & (img[:,:,1] > rgb_thresh[1]) \
                 & (img[:,:,2] > rgb_thresh[2])
     color_select_navi[above_thresh] = 1
     #Morphological filter
-    dilation = cv2.dilate(color_select_navi,kernel,iterations = 2)
+    dilation = cv2.dilate(color_select_navi,kernel,iterations = 3)
     #only boundary
     wall_selection = (color_select_navi != dilation)
     wall[wall_selection] =1
 
-    return wall
+    height,width = wall.shape
+
+    poly_img = np.zeros((height,width), np.uint8)
+    clipper = np.array( [[[156,155],[40,60],[260,60],[165,154]]], dtype=np.int32 )
+    #clipper = np.array( [[[157,153],[1,42],[0,42],[0,0],[320,0],[320,43],[319,43],[165,153]]], dtype=np.int32 )
+    cv2.fillPoly( poly_img, clipper, 1 )
+    masked_data = cv2.bitwise_and(wall, wall, mask=poly_img)
+
+    return masked_data
 
 # Define a function to convert to rover-centric coordinates
 def rover_coords(binary_img):
@@ -128,12 +136,26 @@ def perception_step(Rover):
                       [Rover.img.shape[1]/2 + dst_size, Rover.img.shape[0] - 2*dst_size - bottom_offset],
                       [Rover.img.shape[1]/2 - dst_size, Rover.img.shape[0] - 2*dst_size - bottom_offset],
                       ])
+    #only interested in these area to reduce noise from scnene
+    # sr_o_intrest = np.float32([[0, Rover.img.shape[1]/2], [Rover.img.shape[0] ,Rover.img.shape[1]/2],[Rover.img.shape[0], Rover.img.shape[1]/2], [Rover.img.shape[0], Rover.img.shape[1]/2]])
+
+    # warped_uncliped = perspect_transform(Rover.img, source, destination)
+    # sample_threshed = sample_thresh(warped_uncliped)
+    # threshed = color_thresh(warped_uncliped)
+
+    height,width,depth = Rover.img.shape
+    rect_img = np.zeros((height,width), np.uint8)
+    cv2.rectangle(rect_img, (0 ,np.int(height*5/12)),(np.int(width) ,np.int(height)), 1, thickness=-1)
+
+    masked_image = cv2.bitwise_and(Rover.img, Rover.img, mask=rect_img)
     # 2) Apply perspective transform
-    warped = perspect_transform(Rover.img, source, destination)
+    warped_cliped = perspect_transform(masked_image, source, destination)
     # 3) Apply color threshold to identify navigable terrain/obstacles/rock samples
-    threshed = color_thresh(warped)
-    obstacles = obstacle_filter(warped)
-    sample_threshed = sample_thresh(warped)
+
+    obstacles = obstacle_filter(warped_cliped)
+    sample_threshed = sample_thresh(warped_cliped)
+    threshed = color_thresh(warped_cliped)
+
 
     # 4) Update Rover.vision_image (this will be displayed on left side of screen)
         # Example: Rover.vision_image[:,:,0] = obstacle color-thresholded binary image
@@ -171,7 +193,7 @@ def perception_step(Rover):
         # Example: Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] += 1
         #          Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
         #          Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
-    if (1>Rover.roll or Rover.roll>359) and (1>Rover.pitch or Rover.pitch>359):
+    if (0.7>Rover.roll or Rover.roll>359.3) and (0.7>Rover.pitch or Rover.pitch>359.3):
         Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] += 1
         Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
         Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
@@ -181,7 +203,9 @@ def perception_step(Rover):
     #mean_dir = np.mean(rover_centric_angles)
     Rover.nav_dists = rover_centric_pixel_distances
     Rover.nav_angles = rover_centric_angles
-
+    if len(xobs) > 0:
+        Rover.obstacle_dists, Rover.obstacle_angles  = to_polar_coords(xobs, yobs)
+        #obstacle flag?
     if len(xrock) > 0:
         #stauts updte
         Rover.sample_on_sight = True
@@ -189,8 +213,8 @@ def perception_step(Rover):
         rockdists, rockangles = to_polar_coords(xrock, yrock)
         Rover.sample_dists = rockdists
         Rover.sample_angles = rockangles
-        rock_dist = np.mean(rockdists)
-        rock_dir = np.mean(rockangles)
+        #rock_dist = np.mean(rockdists)
+        #rock_dir = np.mean(rockangles)
         # print('rock dist and angle: ',rock_dist, rock_dir)
         # print(rockdists, rockangles)
     else:
