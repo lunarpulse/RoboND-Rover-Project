@@ -91,6 +91,7 @@ class RoverState():
         self.start_position = None #(,) enter when started == 1
         self.started = False #started?
         self.finished = False  #set when 6 samples are collected
+        self.rth_angle = 0
 # Initialize our rover
 Rover = RoverState()
 
