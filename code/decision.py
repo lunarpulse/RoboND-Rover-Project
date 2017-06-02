@@ -1,5 +1,5 @@
 import numpy as np
-
+import time
 
 # This is where you can build a decision tree for determining throttle, brake and steer
 # commands based on the output of the perception_step() function
@@ -11,6 +11,7 @@ def decision_step(Rover):
         Rover.started = True
         Rover.drive_tendancy = -1
         Rover.start_position = (Rover.pos[0], Rover.pos[1])
+        Rover.sample_collected_time = time.time()
 
     if Rover.samples_collected >5:
         Rover.finished = True
@@ -25,21 +26,23 @@ def decision_step(Rover):
     #TODO: when finished it can go back to start position by using dynamic programming
     if Rover.finished is not True:
 
-
         if Rover.picking_up == 1:
-            Rover.samples_collected += 1
+            if (time.time() - Rover.sample_collected_time) > 15:
+                Rover.sample_collected_time = time.time()
+                Rover.samples_collected += 1
             Rover.sample_on_sight = False
             Rover.picking_up = 0
+
 
             Rover.brake = 0
             Rover.steer = 15
             Rover.throttle = 0
-            Rover.mode = 'stop'
+            Rover.mode = 'forward'
             return Rover
 
         if Rover.near_sample == True:
             Rover.mode = 'stop'
-            Rover.brake = Rover.brake_set
+            Rover.brake = Rover.brake_set*2
             Rover.throttle = 0
             Rover.send_pickup = True
 
@@ -67,9 +70,9 @@ def decision_step(Rover):
                 #     Rover.brake = 0
                 #     Rover.throttle = 1
                 #     return Rover
-                if Rover.stuck_frames > 40:
+                if Rover.stuck_frames > 30:
                     Rover.mode = 'stop'
-                    Rover.steer = -15*Rover.drive_tendancy
+                    Rover.steer = -11.25*Rover.drive_tendancy
                     Rover.brake = 0
                     Rover.throttle = 0
 
@@ -98,17 +101,25 @@ def decision_step(Rover):
                     #     pass
                     # Set steering to average angle clipped to the range +/- 15
 
-                    Rover.steer = np.clip(np.mean(Rover.nav_angles * 180/np.pi), -15, 15) + Rover.drive_tendancy* Rover.drive_bias_angle
-                    if Rover.vel> 1.5 and (np.mean(Rover.obstacle_angles* 180 / np.pi) > 6 or np.mean(Rover.obstacle_angles* 180 / np.pi)< -6):
-                        Rover.brake = 0.2
-                        Rover.steer = 15 * Rover.drive_tendancy
-                        Rover.throttle /= 2
+                    # Rover.steer = np.clip(np.mean(Rover.nav_angles * 180/np.pi), -12.5, 12.5)# + Rover.drive_tendancy* Rover.drive_bias_angle
+                    nav_angle = np.mean(Rover.nav_angles * 180/np.pi)
+                    obs_angle = np.mean(Rover.obstacle_angles* 180 / np.pi)
+                    # Rover.steer = np.clip(nav_angle, -11.5, 11.5) # - np.mean(Rover.obstacle_angles* 180 / np.pi)*0.5
+                    if Rover.vel> 1.15 and (obs_angle > 7 or obs_angle< -4):
+                        Rover.brake = 0.05
+                        Rover.steer = 14.5 * Rover.drive_tendancy
+                        Rover.throttle = 0
+                    elif (7< obs_angle< -4) :
+                        Rover.brake =0
+                        Rover.steer = np.clip(nav_angle, -7.5, 7.5)
                     else:
                         Rover.brake =0
-
-                    if len(Rover.obstacle_dists)> 2000:
-                        Rover.steer = 15 * Rover.drive_tendancy
-                    if Rover.vel > 1.5:
+                        Rover.steer = np.clip(nav_angle, -15, 15)
+                    # if len(Rover.nav_dists)>50000:
+                    #     Rover.steer = 10 * Rover.drive_tendancy
+                    if len(Rover.obstacle_dists)> 6000:
+                        Rover.steer = obs_angle* Rover.drive_tendancy
+                    if Rover.vel > 2:
                         Rover.steer = Rover.steer/2
                     # obs_angle_min = np.min(Rover.obstacle_angles * 180/np.pi)
                     # obs_angle_max = np.max(Rover.obstacle_angles * 180/np.pi)
@@ -119,13 +130,14 @@ def decision_step(Rover):
                     #         Rover.steer = np.clip(obs_angle_min, -15, 15) - Rover.drive_tendancy* Rover.drive_bias_angle
                     if Rover.stuck_frames > 15:
                         Rover.throttle = 1
+                        Rover.steer = np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi)*0.5, -11.5, 11.5)
                 # If there's a lack of navigable terrain pixels then go to 'stop' ode
                 elif len(Rover.nav_angles) < Rover.stop_forward or Rover.stuck_frames > 10:
                         # Set mode to "stop" and hit the brakes!
                         Rover.throttle = 0
                         # Set brake to stored brake value
                         Rover.brake = 0
-                        Rover.steer = Rover.steer = -15*Rover.drive_tendancy
+                        Rover.steer = -np.clip(Rover.drive_tendancy*np.mean(Rover.obstacle_angles), -1,1)*10
                         Rover.mode = 'stop'
 
 
@@ -139,7 +151,7 @@ def decision_step(Rover):
                 # If we're not moving (vel < 0.2) then do something else
                 elif Rover.vel <= 0.2:
                     # Now we're stopped and we have vision data to see if there's a path forward
-                    if np.mean(Rover.obstacle_dists) < 50 or len(Rover.nav_angles) < Rover.go_forward:#(np.mean(Rover.obstacle_angles* 180 / np.pi) > 10 or np.mean(Rover.obstacle_angles* 180 / np.pi)< -10):#len(Rover.nav_angles) < Rover.go_forward:
+                    if np.mean(Rover.obstacle_dists) < 20 or len(Rover.nav_angles) < Rover.go_forward:#(np.mean(Rover.obstacle_angles* 180 / np.pi) > 10 or np.mean(Rover.obstacle_angles* 180 / np.pi)< -10):#len(Rover.nav_angles) < Rover.go_forward:
 
                         Rover.throttle = 0
                         # Release the brake to allow turning
@@ -148,10 +160,10 @@ def decision_step(Rover):
                         #TODO: depends on the Obstacle perception steer where obstacles
 
                          # Could be more clever here about which way to turn
-                        Rover.steer = -15*Rover.drive_tendancy#np.clip(np.mean(Rover.nav_angles * 180/np.pi), -15, 15)
+                        Rover.steer = -7.5*Rover.drive_tendancy#np.clip(np.mean(Rover.nav_angles * 180/np.pi), -15, 15)
 
                     # If we're stopped but see sufficient navigable terrain in front then go!
-                    if np.mean(Rover.obstacle_dists) >= 50 and len(Rover.nav_angles) >= Rover.go_forward and Rover.stuck_frames < 5: #(-10 < np.mean(Rover.obstacle_angles* 180 / np.pi) < 10):
+                    if np.mean(Rover.obstacle_dists) >= 20 and len(Rover.nav_angles) >= Rover.go_forward and Rover.stuck_frames < 5: #(-10 < np.mean(Rover.obstacle_angles* 180 / np.pi) < 10):
                         # Set throttle back to stored value
                         Rover.throttle = Rover.throttle_set
                         # Release the brake
@@ -159,7 +171,7 @@ def decision_step(Rover):
                         # Set steer to mean angle
                         Rover.steer = np.clip(np.mean(Rover.nav_angles * 180/np.pi), -15, 15)
                         Rover.mode = 'forward'
-                    if Rover.stuck_frames > 60:
+                    if Rover.stuck_frames > 50:
                         Rover.mode = 'reverse'
                         Rover.steer = 0
                         Rover.brake = 5
@@ -178,7 +190,7 @@ def decision_step(Rover):
                     Rover.throttle = -1
                     Rover.steer = Rover.drive_tendancy* np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi)*4,-15,15)
                     Rover.stuck_frames -= 1
-                    if np.max(Rover.obstacle_angles) > 40:
+                    if np.min(Rover.obstacle_dists) > 30:
                         Rover.mode = 'foward'
                         Rover.brake = 2
                         Rover.throttle = Rover.throttle_set
@@ -188,91 +200,119 @@ def decision_step(Rover):
                     Rover.mode = 'forward'
 
             elif Rover.mode == 'approach':
-
-                if len(Rover.sample_angles)> 0 :
-
-                    rock_distance = np.mean(Rover.sample_dists)
-                    rock_angle = np.mean(Rover.sample_angles * 180 / np.pi)
+                if len(Rover.sample_dists)<1 :
+                    Rover.sample_persistance -= 1
+                    if Rover.sample_persistance <1 :
+                        Rover.sample_on_sight = False
+                        Rover.mode = 'forward'
+                rock_distance = np.mean(Rover.sample_dists)
+                rock_angle = np.mean(Rover.sample_angles * 180 / np.pi)
+                if len(Rover.sample_angles)> 0 and Rover.sample_on_sight is True :
                     if len(Rover.nav_angles) >= Rover.stop_forward:
-                        if rock_distance > 30:
-                            if Rover.vel > 2:
-                                Rover.brake = rock_distance/100
+                        if rock_distance< 30:
+                            if Rover.vel > 1:
+                                Rover.brake = rock_distance/40
                             else:
                                 Rover.brake = 0
-                            Rover.throttle = Rover.throttle_set*2
-                            Rover.steer = rock_angle
-                            if Rover.stuck_frames > 20:
+                            if Rover.near_sample == True:
+                                Rover.brake = 10
+                            Rover.throttle = Rover.throttle_set*0.5
+                            Rover.steer = np.clip(rock_angle,-15,15)
+                            if Rover.stuck_frames > 40:
                                 Rover.throttle = 1
-                                Rover.steer = np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi)*4,-15,15)*Rover.drive_tendancy
-                            # if Rover.send_pickup is True:
-                            #     Rover.send_pickup = False
-                        elif rock_distance < 30:
-                            if Rover.vel > 1:
+                                Rover.steer = np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi)*2,-15,15)*Rover.drive_tendancy
+                        elif 30<rock_distance < 80:
+                            if Rover.vel > 1.3:
                                 Rover.brake = rock_distance/60
                             else:
                                 Rover.brake = 0
                             Rover.throttle = Rover.throttle_set
-                            Rover.steer = rock_angle*2
+                            Rover.steer = np.clip(rock_angle,-15,15)
+                            if Rover.stuck_frames > 10:
+                                Rover.throttle = 1
+                                Rover.steer = np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi),-15,15)*Rover.drive_tendancy
+                            # if Rover.send_pickup is True:
+                            #     Rover.send_pickup = False
+                        elif rock_distance > 80:
+                            if Rover.vel > 1.75:
+                                Rover.brake = rock_distance/80
+                            else:
+                                Rover.brake = 0
+                            Rover.throttle = Rover.throttle_set
+                            Rover.steer = rock_angle
 
-                            print("Sample in proximity thr, st, Br, near_sample: ",Rover.throttle,Rover.steer,Rover.brake, Rover.near_sample)
+                            # print("Sample in proximity thr, st, Br, near_sample: ",Rover.throttle,Rover.steer,Rover.brake, Rover.near_sample)
                     # elif len(Rover.nav_angles) < Rover.stop_forward:
                     #     Rover.mode = 'stop'
                     #     return Rover
-                    if Rover.stuck_frames > 300:
-                        Rover.mode = 'stop'
-                        Rover.steer = -15*Rover.drive_tendancy
-                        Rover.brake = 5
+                    if Rover.stuck_frames > 15:
+                        Rover.mode = 'reverse'
+                        Rover.steer = -np.clip(rock_angle, 15,-15)
+                        Rover.throttle = -0.4
+                        Rover.brake = 0
+                        Rover.sample_on_sight = False
+                        Rover.stuck_frames -= 1
+                    elif Rover.stuck_frames > 5:
+                        Rover.steer = np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi),-15,15)
+                        Rover.throttle = 1
+                        Rover.brake = 0
                 else:
-                    if Rover.sample_persistance < 1:
-                         Rover.sample_on_sight = False
-                         Rover.mode = 'forward'
-
-                    Rover.throttle = 0
-            elif Rover.mode == 'return':
-                #if rover is in the model zone
-                target_x, target_y = Rover.start_position
-                if target_x is not Rover.pos[0] and target_y is not Rover.pos[1]:
-                    # if it is not too far from theat
-                    #find the angle and distance
-                    distance2start = np.sqrt((target_y - Rover.pos[1])*(target_y - Rover.pos[1]) + (target_x - Rover.pos[0])*(target_x - Rover.pos[0]))
-
-                    if distance2start < 100 and (-7 < np.mean(Rover.obstacle_angles* 180 / np.pi) < 7):
-                        #it is near and clear path
-                        #if no obstacle infront
-                        #find out the angle to the starting point.
-
-                        # theta = np.arctan2(target_y,target_x) #RAD angle need to convert to angle
-                        Rover.steer = np.clip(theta* 180 / np.pi, -15,15)
-
-                        Rover.throttle = Rover.throttle_set/2
-                        Rover.brake = 0
-                        Rover.mode = 'return'
-
-                    #check in front if any obstacle
-                        #then take the clear path towards the targetx and y
-                        #detour until within 10 degree
-                    elif distance2start > 100 and (-7 > np.mean(Rover.obstacle_angles* 180 / np.pi) and 7 < np.mean(Rover.obstacle_angles* 180 / np.pi)):
-                        Rover.steer = np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi)*4,-15,15)*Rover.drive_tendancy
-
-                        Rover.throttle = 0
-                        Rover.brake = 0
-                        Rover.mode = 'stop'
-                    else:
-                        Rover.throttle = Rover.throttle_set
-                        Rover.brake = 0
-                        Rover.mode = 'forward'
-
-                        #and turn to the target and go
-                elif target_x is  Rover.pos[0] and target_y is  Rover.pos[1]:
-                    Rover.throttle = 0
-                    Rover.brake = 10
-                    Rover.steer = 0
-                    Rover.mode = 'stop'
-                else:
-                    Rover.throttle = Rover.throttle_set
+                    # if Rover.sample_persistance < 1:
+                    Rover.sample_on_sight = False
+                    Rover.mode = 'reverse'
                     Rover.brake = 0
-                    Rover.steer = np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi)*4,-15,15)*Rover.drive_tendancy
-                    Rover.mode = 'forward'
+                    Rover.throttle = -0.5
+                    Rover.steer = Rover.drive_tendancy* rock_angle
+                    Rover.stuck_frames -= 1
+                    if np.max(Rover.obstacle_angles) > 50:
+                     Rover.mode = 'foward'
+                     Rover.brake = 2
+
+            # elif Rover.mode == 'return':
+            #     #if rover is in the model zone
+            #     target_x, target_y = Rover.start_position
+            #     if target_x is not Rover.pos[0] and target_y is not Rover.pos[1]:
+            #         # if it is not too far from theat
+            #         #find the angle and distance
+            #         distance2start = np.sqrt((target_y - Rover.pos[1])*(target_y - Rover.pos[1]) + (target_x - Rover.pos[0])*(target_x - Rover.pos[0]))
+            #
+            #         if distance2start < 100 and (-7 < np.mean(Rover.obstacle_angles* 180 / np.pi) < 7):
+            #             #it is near and clear path
+            #             #if no obstacle infront
+            #             #find out the angle to the starting point.
+            #
+            #             # theta = np.arctan2(target_y,target_x) #RAD angle need to convert to angle
+            #             Rover.steer = np.clip(theta* 180 / np.pi, -15,15)
+            #
+            #             Rover.throttle = Rover.throttle_set/2
+            #             Rover.brake = 0
+            #             Rover.mode = 'return'
+            #
+            #         #check in front if any obstacle
+            #             #then take the clear path towards the targetx and y
+            #             #detour until within 10 degree
+            #         elif distance2start > 100 and (-7 > np.mean(Rover.obstacle_angles* 180 / np.pi) and 7 < np.mean(Rover.obstacle_angles* 180 / np.pi)):
+            #             Rover.steer = np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi)*4,-15,15)*Rover.drive_tendancy
+            #
+            #             Rover.throttle = 0
+            #             Rover.brake = 0
+            #             Rover.mode = 'stop'
+            #         else:
+            #             Rover.throttle = Rover.throttle_set
+            #             Rover.brake = 0
+            #             Rover.mode = 'forward'
+            #
+            #             #and turn to the target and go
+            #     elif target_x is  Rover.pos[0] and target_y is  Rover.pos[1]:
+            #         Rover.throttle = 0
+            #         Rover.brake = 10
+            #         Rover.steer = 0
+            #         Rover.mode = 'stop'
+            #     else:
+            #         Rover.throttle = Rover.throttle_set
+            #         Rover.brake = 0
+            #         Rover.steer = np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi)*4,-15,15)*Rover.drive_tendancy
+            #         Rover.mode = 'forward'
             else:
                 Rover.mode = 'forward'
 
@@ -291,6 +331,8 @@ def decision_step(Rover):
             Rover.mode = 'reverse'
 
     elif Rover.finished is True:
+        if Rover.nav_angles is None:
+            Rover.nav_angles = [0]
         if Rover.stuck_frames< 50:
 
             #if rover is in the model zone
@@ -336,11 +378,13 @@ def decision_step(Rover):
                         Rover.brake = 0
                         Rover.mode = 'turning'
                     else:
+
                         Rover.steer = np.clip(np.mean(Rover.nav_angles* 180 / np.pi),-15,15)
                         Rover.throttle = Rover.throttle_set
                         Rover.brake = 0
                         Rover.mode = 'roitering'
                 else:
+
                     Rover.steer = np.clip(np.mean(Rover.nav_angles* 180 / np.pi),-15,15)
                     Rover.throttle = Rover.throttle_set
                     Rover.brake = 0
@@ -363,95 +407,11 @@ def decision_step(Rover):
             Rover.brake = 0
             Rover.steer = np.clip(np.mean(Rover.nav_angles* 180 / np.pi),-7,7)
             Rover.mode = 'wonder'
-        # return Rover
-    # elif Rover.finished is True:
-    #     #if rover is in the model zone
-    #
-    #     if Rover.stuck_frames < 20 and Rover.mode == 'return':
-    #         target_x, target_y = Rover.start_position
-    #         if target_x is  Rover.pos[0] and target_y is  Rover.pos[1]:
-    #             Rover.throttle = 0
-    #             Rover.brake = 10
-    #             Rover.steer = 0
-    #             Rover.mode = 'finished'
-    #         elif target_x is not Rover.pos[0] and target_y is not Rover.pos[1]:
-    #             # if it is not too far from theat
-    #             #find the angle and distance
-    #             distance2start = np.sqrt((target_y - Rover.pos[1])*(target_y - Rover.pos[1]) + (target_x - Rover.pos[0])*(target_x - Rover.pos[0]))
-    #
-    #             if distance2start < 100 and (-7 < np.mean(Rover.obstacle_angles* 180 / np.pi) < 7):
-    #                 #it is near and clear path
-    #                 #if no obstacle infront
-    #                 #find out the angle to the starting point.
-    #
-    #                 theta = np.arctan2(target_y,target_x) #RAD angle need to convert to angle
-    #                 Rover.steer = np.clip(theta* 180 / np.pi, -15,15)
-    #
-    #                 Rover.throttle = Rover.throttle_set
-    #                 Rover.brake = 0
-    #             elif distance2start > 100 and (-7 < np.mean(Rover.obstacle_angles* 180 / np.pi) < 7):
-    #                 theta = np.arctan2(target_y,target_x) #RAD angle need to convert to angle
-    #                 Rover.steer = np.clip(theta* 180 / np.pi, -15,15)
-    #
-    #                 Rover.throttle = Rover.throttle_set*2
-    #                 Rover.brake = 0
-    #
-    #         else:
-    #             over.throttle = Rover.throttle_set
-    #             Rover.brake = 0
-    #             Rover.steer = np.clip(np.mean(Rover.nav_angles * 180/np.pi), -15, 15)#np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi)*4,-15,15)*Rover.drive_tendancy
-                # Rover.mode = 'forward'
-                #check in front if any obstacle
-                    #then take the clear path towards the targetx and y
-                    #detour until within 10 degree
-            #     elif distance2start > 100 and (-7 > np.mean(Rover.obstacle_angles* 180 / np.pi) and 7 < np.mean(Rover.obstacle_angles* 180 / np.pi)):
-            #         Rover.steer = np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi)*4,-15,15)*Rover.drive_tendancy
-            #
-            #         Rover.throttle = 0
-            #         Rover.brake = 0
-            #         Rover.mode = 'stop'
-            #     else:
-            #         Rover.throttle = Rover.throttle_set
-            #         Rover.brake = 0
-            #         Rover.mode = 'forward'
-            #
-            #         #and turn to the target and go
-            # elif target_x is  Rover.pos[0] and target_y is  Rover.pos[1]:
-            #     Rover.throttle = 0
-            #     Rover.brake = 10
-            #     Rover.steer = 0
-            #     Rover.mode = 'stop'
-            # else:
-            #     Rover.throttle = Rover.throttle_set
-            #     Rover.brake = 0
-            #     Rover.steer = np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi)*4,-15,15)*Rover.drive_tendancy
-            #     Rover.mode = 'forward'
-        # elif Rover.stuck_frames > 20:# and (-8 > np.mean(Rover.obstacle_angles* 180 / np.pi) and 8 < np.mean(Rover.obstacle_angles* 180 / np.pi)):
-        #     Rover.throttle = 0
-        #     Rover.brake = 0
-        #     Rover.steer = -15*Rover.drive_tendancy
-        #     Rover.stuck_frames = -1
-        #     # Rover.mode = 'stop'
-        #
-        #     if Rover.stuck_frames > 50:
-        #         Rover.brake = 0
-        #         Rover.throttle = -1
-        #         Rover.steer = Rover.drive_tendancy* np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi)*4,-15,15)
-        #         Rover.stuck_frames -= 2
-        # elif Rover.mode == 'finished':
-        #     Rover.brake = 10
-        #     Rover.throttle = 0
-        #     Rover.steer = 0
-    #     else:
-    #         Rover.throttle = Rover.throttle_set
-    #         Rover.brake = 0
-    #         Rover.steer = np.clip(np.mean(Rover.nav_angles * 180/np.pi), -15, 15)#np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi)*4,-15,15)*Rover.drive_tendancy
-    #         Rover.mode = 'forward'
     else:
         Rover.throttle = Rover.throttle_set
         Rover.brake = 0
         Rover.steer = np.clip(np.mean(Rover.nav_angles * 180/np.pi), -15, 15)#np.clip(np.mean(Rover.obstacle_angles* 180 / np.pi)*4,-15,15)*Rover.drive_tendancy
         Rover.mode = 'forward'
         # return Rover
-    print(Rover.finished,Rover.mode,Rover.stuck_frames, (np.arctan2(Rover.start_position[1]-Rover.pos[1],Rover.start_position[0]-Rover.pos[0])* 180/np.pi- Rover.yaw)%360)#, np.mean(Rover.nav_dists), np.mean(Rover.obstacle_angles* 180 / np.pi),np.min(Rover.obstacle_angles* 180 / np.pi),np.max(Rover.obstacle_angles* 180 / np.pi))
+    print(Rover.samples_collected,Rover.mode,Rover.stuck_frames,np.mean(Rover.obstacle_angles* 180 / np.pi), Rover.steer)#, (np.arctan2(Rover.start_position[1]-Rover.pos[1],Rover.start_position[0]-Rover.pos[0])* 180/np.pi- Rover.yaw)%360)#, np.mean(Rover.nav_dists), np.mean(Rover.obstacle_angles* 180 / np.pi),np.min(Rover.obstacle_angles* 180 / np.pi),np.max(Rover.obstacle_angles* 180 / np.pi))
     return Rover
