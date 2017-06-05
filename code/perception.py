@@ -6,7 +6,7 @@ import cv2
 def color_thresh(img, rgb_thresh=(160, 160, 160)):
     # Create an array of zeros same xy size as img, but single channel
     color_select = np.zeros_like(img[:,:,0])
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(3,3))
     # Require that each pixel be above all three threshold values in RGB
     # above_thresh will now contain a boolean array with "True"
     # where threshold was met
@@ -43,7 +43,7 @@ def obstacle_filter(img, rgb_thresh=(160, 160, 160)):
                 & (img[:,:,2] > rgb_thresh[2])
     color_select_navi[above_thresh] = 1
     #Morphological filter
-    dilation = cv2.dilate(color_select_navi,kernel,iterations = 2)
+    dilation = cv2.dilate(color_select_navi,kernel,iterations = 1)
     #only boundary
     wall_selection = (color_select_navi != dilation)
     wall[wall_selection] =1
